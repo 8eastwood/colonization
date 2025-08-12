@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 public class Base : MonoBehaviour
 {
@@ -12,34 +9,23 @@ public class Base : MonoBehaviour
     [Space(10)]
     
     [SerializeField] private SpawnPointProvider _spawnPointProvider;
+    [SerializeField] private CollectorsCollectionsHandler _collectorsCollectionsHandler;
     [SerializeField] private CollisionHandler _collisionHandler;
     [SerializeField] private FlagPlacer _flagPlacer;
-    [SerializeField] private SpawnPoint _spawnPoint;
     [SerializeField] private Storage _storage;
     [SerializeField] private DropOff _dropOff;
     [SerializeField] private int _initialBotAmount = 3;
 
-    private List<Collector> _freeCollectors;
-    private List<Collector> _collectors = new List<Collector>();
     private bool _initialSpawnDone = false;
 
-    public int CollectorsCount => _collectors.Count;
-    
-    public SpawnPoint SpawnPoint => _spawnPoint;
+    public int CollectorsCount => _collectorsCollectionsHandler.Collectors.Count;
     public FlagPlacer FlagPlacer => _flagPlacer;
     public DataBase DataBase => _dataBase;
     public DropOff DropOff => _dropOff;
 
-    public Action<Collector> Reassigned;
-
-    private void Awake()
-    {
-        _freeCollectors = new List<Collector>();
-    }
-
     private void OnEnable()
     {
-        _collisionHandler.CollectorReached += SetFreeFromTask;
+        _collisionHandler.CollectorReached += OnSupplyDeliver;
 
         if (_scanner != null)
         {
@@ -61,7 +47,7 @@ public class Base : MonoBehaviour
     private void OnDisable()
     {
         _scanner.SuppliesFounded -= AssignCollector;
-        _collisionHandler.CollectorReached -= SetFreeFromTask;
+        _collisionHandler.CollectorReached -= OnSupplyDeliver;
     }
 
     public void Init(DataBase dataBase, Scanner scanner, CollectorSpawner collectorSpawner)
@@ -78,21 +64,22 @@ public class Base : MonoBehaviour
     {
         var spawnPoint = _spawnPointProvider.GetSpawnPoint();
         
-        _freeCollectors.Add(collector);
-        _collectors.Add(collector);
+        _collectorsCollectionsHandler.AddFreeCollector(collector);
+        _collectorsCollectionsHandler.AddCollector(collector);
         collector.SetBaseInfo(DropOff, spawnPoint);
         collector.ResetToSpawnPoint();
     }
 
     public void SendBotToBuildBase()
     {
-        if (_freeCollectors.Count > 0)
+        if (_collectorsCollectionsHandler.FreeCollectors.Count > 0)
         {
-            Collector collector = _freeCollectors[Random.Range(0, _freeCollectors.Count)];
+            Collector collector = _collectorsCollectionsHandler.GetFreeCollector();
 
             collector.SetTargetToFlag(_flagPlacer.Flag.transform.position);
-            _freeCollectors.Remove(collector);
+            _collectorsCollectionsHandler.RemoveFreeCollector(collector);
             collector.ReachedFlag += RemoveFlag;
+            _collectorsCollectionsHandler.RemoveCollector(collector);
         }
     }
 
@@ -118,20 +105,21 @@ public class Base : MonoBehaviour
         collector.ReachedFlag -= RemoveFlag;
     }
 
-    public void ExpansionCollectorsAmount()
+    public void SpawnAdditionalCollector()
     {
         SpawnCollector();
     }
 
-    private void SetFreeFromTask(Collector collector)
+    private void OnSupplyDeliver(Collector collector)
     {
-        _storage.SupplyDelivered(collector.TargetSupplyBox);
+        _storage.HandleScore(collector.TargetSupplyBox);
+        DataBase.RemoveSuppliesFromCollection(collector.TargetSupplyBox);
         collector.TargetSupplyBox.Destroy();
         collector.FreeFromTask();
         collector.ResetToSpawnPoint();
-        _freeCollectors.Add(collector);
+        _collectorsCollectionsHandler.AddFreeCollector(collector);
 
-        if (_freeCollectors.Count != 0 && _dataBase.SuppliesToCollect.Count > 0)
+        if (_collectorsCollectionsHandler.FreeCollectors.Count != 0 && _dataBase.SuppliesToCollect.Count > 0)
         {
             AssignCollector();
         }
@@ -139,18 +127,18 @@ public class Base : MonoBehaviour
 
     private void AssignCollector()
     {
-        if (_dataBase.SuppliesToCollect.Count == 0 || _freeCollectors.Count == 0)
+        if (_dataBase.SuppliesToCollect.Count == 0 || _collectorsCollectionsHandler.FreeCollectors.Count == 0)
             return;
 
-        for (int i = _freeCollectors.Count - 1; i >= 0; i--)
+        for (int i = _collectorsCollectionsHandler.FreeCollectors.Count - 1; i >= 0; i--)
         {
             if (_dataBase.SuppliesToCollect.Count == 0)
                 break;
 
             SupplyBox task = RequestToAssignTask();
-            Collector collector = _freeCollectors[i];
+            Collector collector = _collectorsCollectionsHandler.FreeCollectors[i];
             collector.RecieveTargetPosition(task);
-            _freeCollectors.RemoveAt(i);
+            _collectorsCollectionsHandler.RemoveFreeCollector(collector);;
         }
     }
 

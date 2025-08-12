@@ -9,13 +9,10 @@ public class Scanner : MonoBehaviour
     [SerializeField] private DataBase _dataBase;
     [Header("Settings")]
     [SerializeField] private float _scanRadius;
+    [SerializeField] private LayerMask _targetLayer;
 
-    private static int _supplyPlacementInLayers = 3;
-
-    private Queue<SupplyBox> _collectableSupply;
     private Coroutine _scanRoutine;
     private float _delay = 1f;
-    private int _targetLayer = 1 << _supplyPlacementInLayers;
 
     public event Action SuppliesFounded;
 
@@ -34,15 +31,17 @@ public class Scanner : MonoBehaviour
         _scanRoutine = StartCoroutine(Scan());
     }
 
-    private Queue<SupplyBox> ScanForSupplies()
+    private void ScanForSupplies()
     {
-        Collider[] supplies = Physics.OverlapSphere(transform.position, _scanRadius, _targetLayer);
+        Collider[] suppliesBuffer = new Collider[20];
+
+        int hitsCount = Physics.OverlapSphereNonAlloc(transform.position, _scanRadius, suppliesBuffer, _targetLayer);
 
         Queue<SupplyBox> toCollect = new();
 
-        foreach (Collider supply in supplies)
+        for (int i = 0; i < hitsCount; i++)
         {
-            SupplyBox supplyBox = supply.GetComponent<SupplyBox>();
+            SupplyBox supplyBox = suppliesBuffer[i].GetComponent<SupplyBox>();
 
             if (supplyBox != null && !toCollect.Contains(supplyBox))
             {
@@ -56,8 +55,6 @@ public class Scanner : MonoBehaviour
             SuppliesFounded?.Invoke();
             StopCoroutine(_scanRoutine);
         }
-
-        return toCollect;
     }
 
     private IEnumerator Scan()
@@ -66,7 +63,7 @@ public class Scanner : MonoBehaviour
         {
             yield return new WaitForSeconds(_delay);
 
-            _collectableSupply = ScanForSupplies();
+            ScanForSupplies();
         }
     }
 }

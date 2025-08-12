@@ -9,9 +9,8 @@ public class Storage : MonoBehaviour
     private int _resourcesForNewCollector = 3;
     private int _resourcesForNewBase = 5;
 
-    public void SupplyDelivered(SupplyBox supply)
+    public void HandleScore(SupplyBox supply)
     {
-        _base.DataBase.RemoveSuppliesFromCollection(supply);
         _scoreCounter.Add();
         CheckScoreMilestones();
     }
@@ -25,7 +24,7 @@ public class Storage : MonoBehaviour
         if (hasResourcesForBot && (isBotSingle || isFlagPlaced == false))
         {
             _scoreCounter.SpendScore(_resourcesForNewCollector);
-            _base.ExpansionCollectorsAmount();
+            _base.SpawnAdditionalCollector();
             return;
         }
 
